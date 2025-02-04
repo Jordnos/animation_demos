@@ -1,0 +1,149 @@
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parallax Test</title>
+    <link rel="stylesheet" href="index.css">
+</head>
+<body>
+    <div class="container">
+        <div class="background"></div>
+        <div class="foreground">
+            <div class="box"></div>
+            <div class="box"></div>
+            <div class="box"></div>
+        </div>
+    </div>
+</body>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+<script>
+    let foreground = document.querySelector(".foreground");
+    let background = document.querySelector(".background");
+
+    let currScale = 1;
+
+    let isDragging = false;
+    let startX, startY, offsetX = 0, offsetY = 0;
+    let velocityX = 0, velocityY = 0;
+    let friction = 0.9; 
+    let parallaxVelocityScale = 0.4 // velocity scale between foreground and background
+    let maxVelocity = 20; // velocity limit
+    let inertiaRequestId = null; // need this to cancel inertia animation when user tries to drag while the foreground is still moving
+
+
+    function startDrag(e) {
+        event.preventDefault();
+        isDragging = true;
+        startX = e.clientX - offsetX;
+        startY = e.clientY - offsetY;
+        
+        velocityX = 0;
+        velocityY = 0;
+      
+        // cancel inertia animation
+        if (inertiaRequestId !== null) {
+            cancelAnimationFrame(inertiaRequestId);
+            inertiaRequestId = null; 
+        }
+      
+    }
+
+    function drag(e) {
+        if (!isDragging) return;
+        let x = e.clientX - startX;
+        let y = e.clientY - startY;
+
+        velocityX = x - offsetX;
+        velocityY = y - offsetY;
+
+        // clamp velocity to prevent flying away
+        velocityX = Math.min(velocityX, maxVelocity);
+        velocityY = Math.min(velocityY, maxVelocity);
+
+        offsetX = x;
+        offsetY = y;
+
+        currScale = getComputedScale(foreground)
+        foreground.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${currScale})`;
+        background.style.transform = `translate(${offsetX * parallaxVelocityScale}px, ${offsetY * parallaxVelocityScale}px)`;
+    }
+
+    function stopDrag() {
+        isDragging = false;
+        requestAnimationFrame(applyInertia);
+    }
+
+    function applyInertia() {
+        if (Math.abs(velocityX) < 0.1 && Math.abs(velocityY) < 0.1) return;
+
+        offsetX += velocityX;
+        offsetY += velocityY;
+
+        velocityX *= friction;
+        velocityY *= friction;
+
+        currScale = getComputedScale(foreground)
+        foreground.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${currScale})`;
+        background.style.transform = `translate(${offsetX * parallaxVelocityScale}px, ${offsetY * parallaxVelocityScale}px))`;
+
+        inertiaRequestId = requestAnimationFrame(applyInertia)
+    }
+
+    document.addEventListener("mousedown", startDrag);
+    document.addEventListener("mousemove", drag);
+    document.addEventListener("mouseup", stopDrag);
+
+    function getComputedScale(element) {
+        let transform = window.getComputedStyle(element).transform;
+        if (transform === "none") return 1;
+        let matrix = new DOMMatrix(transform);
+        return matrix.a; // Extract scaleX value
+    }
+
+    window.addEventListener("wheel", (event) => {
+        let direction = event.deltaY > 0 ? 1 : -1;
+
+        gsap.to(foreground, {
+            scale: "+=" + direction*0.8,
+            onUpdate: () => {
+                if (getComputedScale(foreground) < 0.1 || getComputedScale(foreground) > 4) {
+                    let startScale;
+                    if (getComputedScale(foreground) < 0.1) {
+                        startScale = 4;
+                    } else {
+                        startScale = 0.1;
+                    }
+                    let newBoxList = [];
+                    document.querySelectorAll(".box").forEach(box => {
+                        let newBox = document.createElement("div");
+                        newBox.className = "box";
+                        newBoxList.push(newBox);
+                    });
+                    foreground.remove();
+                    renderNewForeground();
+                    renderNewBoxList(newBoxList);
+                    foreground = document.querySelector(".foreground");
+                    foreground.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${startScale})`;
+                } 
+            }
+        })
+    })
+
+    let renderNewBoxList = (boxList) => {
+        let container = document.querySelector(".foreground");
+        boxList.forEach(box => {
+            container.appendChild(box);
+        });
+    }
+
+    let renderNewForeground = () => {
+        let foreground = document.createElement("div");
+        foreground.className = "foreground";
+
+        let container = document.querySelector(".container");
+        container.appendChild(foreground);
+    }
+
+</script>
+
+
